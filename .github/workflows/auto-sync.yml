@@ -1,0 +1,304 @@
+name: Auto Sync - Session Messenger Server
+
+on:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'session-messenger-server/**'
+  pull_request:
+    branches: [ main, master ]
+    paths:
+      - 'session-messenger-server/**'
+  workflow_dispatch:
+    inputs:
+      sync_direction:
+        description: 'Sync direction'
+        required: true
+        default: 'deploy'
+        type: choice
+        options:
+        - deploy
+        - pull
+        - both
+  schedule:
+    # Run every 5 minutes to check for server changes
+    - cron: '*/5 * * * *'
+
+env:
+  SERVER_USER: laravel
+  SERVER_IP: 41.76.111.100
+  SERVER_PORT: 1337
+  SOCKET_PORT: 5000
+  SERVER_PATH: /var/www/askless
+  GIT_REPO: git@github.com:bsekhosana/askless.git
+  PM2_PROCESS_NAME: askless-session-messenger
+  ROOT_PASS: ${{ secrets.ROOT_PASS }}
+
+jobs:
+  deploy-to-server:
+    if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_direction == 'deploy')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          path: session-messenger-server
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: session-messenger-server/package-lock.json
+
+      - name: Install dependencies
+        working-directory: session-messenger-server
+        run: npm ci
+
+      - name: Run tests
+        working-directory: session-messenger-server
+        run: npm test
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ env.SERVER_PORT }} -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to server
+        run: |
+          echo "🚀 Deploying to server..."
+          
+          # Create deployment script
+          cat > deploy_github_action.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          echo "📁 Creating server directory..."
+          mkdir -p ${{ env.SERVER_PATH }}
+          
+          echo "📂 Cloning/updating repository..."
+          if [ ! -d "${{ env.SERVER_PATH }}/.git" ]; then
+              cd ${{ env.SERVER_PATH }}
+              git clone ${{ env.GIT_REPO }} .
+          else
+              cd ${{ env.SERVER_PATH }}
+              git fetch origin
+              git reset --hard origin/main
+          fi
+          
+          echo "📦 Installing dependencies..."
+          npm install --production
+          
+          echo "🔧 Setting up environment..."
+          if [ ! -f ".env" ]; then
+              cat > .env << ENVEOF
+          # Session Messenger Server Environment
+          NODE_ENV=production
+          PORT=${{ env.SOCKET_PORT }}
+          SOCKET_PORT=${{ env.SOCKET_PORT }}
+          
+          # Database Configuration (if needed)
+          DB_HOST=localhost
+          DB_USERNAME=root
+          DB_PASSWORD=
+          DB_DATABASE=sechat
+          DB_PORT=3306
+          
+          # SSL Configuration
+          SSL_KEY_PATH=/etc/letsencrypt/live/askless.strapblaque.com/privkey.pem
+          SSL_CERT_PATH=/etc/letsencrypt/live/askless.strapblaque.com/fullchain.pem
+          
+          # Logging
+          LOG_LEVEL=info
+          LOG_FILE=logs/session-messenger.log
+          ENVEOF
+          fi
+          
+          echo "📁 Creating logs directory..."
+          mkdir -p logs
+          
+          # Stop existing process if running
+          pm2 stop ${{ env.PM2_PROCESS_NAME }} 2>/dev/null || true
+          pm2 delete ${{ env.PM2_PROCESS_NAME }} 2>/dev/null || true
+          
+          # Start new process
+          pm2 start server.js --name ${{ env.PM2_PROCESS_NAME }} --env production
+          
+          echo "💾 Saving PM2 configuration..."
+          pm2 save
+          
+          echo "✅ Deployment completed!"
+          
+          echo "🔍 Checking server health..."
+          sleep 3
+          
+          # Check local health
+          LOCAL_HEALTH=$(curl -s -w "%{http_code}" http://localhost:${{ env.SOCKET_PORT }}/health)
+          LOCAL_HTTP_CODE=${LOCAL_HEALTH: -3}
+          LOCAL_RESPONSE=${LOCAL_HEALTH%???}
+          
+          if [ "$LOCAL_HTTP_CODE" = "200" ]; then
+              echo "✅ Local server is healthy (HTTP $LOCAL_HTTP_CODE)"
+              echo "Response: $LOCAL_RESPONSE"
+          else
+              echo "⚠️ Local health check failed (HTTP $LOCAL_HTTP_CODE)"
+              echo "Response: $LOCAL_RESPONSE"
+          fi
+          
+          echo "📋 Recent logs:"
+          pm2 logs ${{ env.PM2_PROCESS_NAME }} --lines 5 --nostream
+          EOF
+          
+          # Execute deployment script on server
+          ssh -p ${{ env.SERVER_PORT }} ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} 'bash -s' < deploy_github_action.sh
+
+      - name: Health check
+        run: |
+          echo "🌐 Testing external access..."
+          sleep 10
+          
+          for i in {1..5}; do
+            EXTERNAL_HEALTH=$(curl -s -w "%{http_code}" https://askless.strapblaque.com/health)
+            EXTERNAL_HTTP_CODE=${EXTERNAL_HEALTH: -3}
+            
+            if [ "$EXTERNAL_HTTP_CODE" = "200" ]; then
+                echo "✅ External access working (HTTP $EXTERNAL_HTTP_CODE)"
+                break
+            else
+                echo "⚠️ External access failed (HTTP $EXTERNAL_HTTP_CODE) - Attempt $i/5"
+                if [ $i -lt 5 ]; then
+                    sleep 10
+                fi
+            fi
+          done
+
+  pull-from-server:
+    if: github.event_name == 'schedule' || (github.event_name == 'workflow_dispatch' && github.event.inputs.sync_direction == 'pull')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ env.SERVER_PORT }} -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Check for server changes
+        id: check-changes
+        run: |
+          echo "🔍 Checking for server changes..."
+          
+          # Get server git status
+          SERVER_STATUS=$(ssh -p ${{ env.SERVER_PORT }} ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "cd ${{ env.SERVER_PATH }} && git status --porcelain")
+          
+          if [ -n "$SERVER_STATUS" ]; then
+              echo "📝 Server has changes:"
+              echo "$SERVER_STATUS"
+              echo "has_changes=true" >> $GITHUB_OUTPUT
+          else
+              echo "✅ No changes detected on server"
+              echo "has_changes=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Pull server changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          echo "📥 Pulling changes from server..."
+          
+          # Create pull script
+          cat > pull_from_server.sh << 'EOF'
+          #!/bin/bash
+          set -e
+          
+          cd ${{ env.SERVER_PATH }}
+          
+          # Commit any uncommitted changes
+          if [ -n "$(git status --porcelain)" ]; then
+              echo "📝 Committing server changes..."
+              git add .
+              git commit -m "Server changes: $(date)"
+          fi
+          
+          # Push to remote repository
+          echo "📤 Pushing server changes to repository..."
+          git push origin main
+          EOF
+          
+          # Execute pull script on server
+          ssh -p ${{ env.SERVER_PORT }} ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} 'bash -s' < pull_from_server.sh
+
+      - name: Update local repository
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          echo "🔄 Updating local repository..."
+          git pull origin main
+
+  monitor-server:
+    if: github.event_name == 'schedule'
+    runs-on: ubuntu-latest
+    steps:
+      - name: Setup SSH
+        uses: webfactory/ssh-agent@v0.8.0
+        with:
+          ssh-private-key: ${{ secrets.SSH_PRIVATE_KEY }}
+
+      - name: Add server to known hosts
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p ${{ env.SERVER_PORT }} -H ${{ env.SERVER_IP }} >> ~/.ssh/known_hosts
+
+      - name: Check server status
+        run: |
+          echo "🔍 Checking server status..."
+          
+          # Check PM2 status
+          PM2_STATUS=$(ssh -p ${{ env.SERVER_PORT }} ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "pm2 show ${{ env.PM2_PROCESS_NAME }} --no-daemon" || echo "Process not found")
+          
+          if echo "$PM2_STATUS" | grep -q "online"; then
+              echo "✅ Server is running"
+          else
+              echo "⚠️ Server is not running, attempting restart..."
+              ssh -p ${{ env.SERVER_PORT }} ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "pm2 restart ${{ env.PM2_PROCESS_NAME }} || pm2 start server.js --name ${{ env.PM2_PROCESS_NAME }} --env production"
+          fi
+          
+          # Check disk space
+          DISK_USAGE=$(ssh -p ${{ env.SERVER_PORT }} ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "df -h ${{ env.SERVER_PATH }} | tail -1")
+          echo "💾 Disk usage: $DISK_USAGE"
+          
+          # Check memory usage
+          MEMORY_USAGE=$(ssh -p ${{ env.SERVER_PORT }} ${{ env.SERVER_USER }}@${{ env.SERVER_IP }} "free -h | grep Mem")
+          echo "🧠 Memory usage: $MEMORY_USAGE"
+
+  notify-status:
+    needs: [deploy-to-server, pull-from-server, monitor-server]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Notify deployment status
+        if: needs.deploy-to-server.result == 'success'
+        run: |
+          echo "✅ Deployment completed successfully!"
+          echo "📱 Server Information:"
+          echo "   - Health Check: https://askless.strapblaque.com/health"
+          echo "   - Statistics: https://askless.strapblaque.com/stats"
+          echo "   - Socket Logs: https://askless.strapblaque.com/logs"
+          echo "   - Test Client: https://askless.strapblaque.com/test-client.html"
+
+      - name: Notify failure
+        if: needs.deploy-to-server.result == 'failure'
+        run: |
+          echo "❌ Deployment failed!"
+          echo "Please check the logs for more details." 
