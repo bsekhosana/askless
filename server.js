@@ -1059,24 +1059,39 @@ app.get('/live-monitor', (req, res) => {
         }
 
         .log-item {
-            padding: 8px;
+            padding: 8px 12px;
             margin-bottom: 4px;
-            border-radius: 4px;
+            border-radius: 6px;
             border-left: 3px solid #667eea;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: #f7fafc;
         }
 
         .log-info { background: #ebf8ff; border-left-color: #4299e1; }
         .log-warn { background: #fef5e7; border-left-color: #ed8936; }
         .log-error { background: #fed7d7; border-left-color: #f56565; }
+        .log-connection { background: #f0fff4; border-left-color: #48bb78; }
+        .log-message { background: #faf5ff; border-left-color: #9f7aea; }
 
         .log-time {
             color: #718096;
             font-size: 0.8em;
+            font-weight: bold;
+            min-width: 80px;
+        }
+
+        .log-level {
+            color: #4a5568;
+            font-size: 0.8em;
+            font-weight: bold;
+            min-width: 60px;
         }
 
         .log-message {
-            color: #4a5568;
-            margin-left: 10px;
+            color: #2d3748;
+            flex: 1;
         }
 
         .refresh-info {
@@ -1420,17 +1435,37 @@ app.get('/live-monitor', (req, res) => {
                         return;
                     }
 
-                    logsList.innerHTML = logs.slice(-20).map(log => \`
-                        <div class="log-item log-\${log.level || 'info'}">
-                            <span class="log-time">\${new Date(log.timestamp).toLocaleTimeString()}</span>
-                            <span class="log-message">\${log.message}</span>
-                        </div>
-                    \`).join('');
+                    logsList.innerHTML = logs.slice(-20).map(logString => {
+                        // Parse log string format: [2025-07-23T19:27:04.008Z] [INFO] Message
+                        const logMatch = logString.match(/^\[([^\]]+)\] \[([^\]]+)\] (.+)$/);
+                        
+                        if (logMatch) {
+                            const [, timestamp, level, message] = logMatch;
+                            const logLevel = level.toLowerCase();
+                            const logTime = new Date(timestamp).toLocaleTimeString();
+                            
+                            return \`
+                                <div class="log-item log-\${logLevel}">
+                                    <span class="log-time">\${logTime}</span>
+                                    <span class="log-level">[\${level}]</span>
+                                    <span class="log-message">\${message}</span>
+                                </div>
+                            \`;
+                        } else {
+                            // Fallback for unparseable logs
+                            return \`
+                                <div class="log-item log-info">
+                                    <span class="log-message">\${logString}</span>
+                                </div>
+                            \`;
+                        }
+                    }).join('');
                     
                     // Auto-scroll to bottom
                     logsList.scrollTop = logsList.scrollHeight;
                 } catch (error) {
                     console.error('Error updating logs:', error);
+                    logsList.innerHTML = '<p style="text-align: center; color: #f56565;">Error loading logs</p>';
                 }
             }
 
