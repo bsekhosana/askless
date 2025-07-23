@@ -115,22 +115,68 @@ wss.on('connection', (ws, req) => {
         case 'auth':
           handleAuth(ws, message.data);
           break;
+        case 'monitor_auth':
+          // Special authentication for monitoring connections
+          handleMonitorAuth(ws, message.data);
+          break;
         case 'invitation_send':
+          if (!currentSessionId) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: { message: 'Authentication required' }
+            }));
+            return;
+          }
           handleInvitationSend(ws, message.data);
           break;
         case 'invitation_accept':
+          if (!currentSessionId) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: { message: 'Authentication required' }
+            }));
+            return;
+          }
           handleInvitationAccept(ws, message.data);
           break;
         case 'invitation_decline':
+          if (!currentSessionId) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: { message: 'Authentication required' }
+            }));
+            return;
+          }
           handleInvitationDecline(ws, message.data);
           break;
         case 'message_send':
+          if (!currentSessionId) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: { message: 'Authentication required' }
+            }));
+            return;
+          }
           handleMessageSend(ws, message.data);
           break;
         case 'typing_indicator':
+          if (!currentSessionId) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: { message: 'Authentication required' }
+            }));
+            return;
+          }
           handleTypingIndicator(ws, message.data);
           break;
         case 'message_read':
+          if (!currentSessionId) {
+            ws.send(JSON.stringify({
+              type: 'error',
+              data: { message: 'Authentication required' }
+            }));
+            return;
+          }
           handleMessageRead(ws, message.data);
           break;
         case 'ping':
@@ -175,6 +221,29 @@ wss.on('connection', (ws, req) => {
     log(`WebSocket error: ${error.message}`, 'ERROR');
     stopHeartbeat();
   });
+
+  // Monitor authentication handler
+  function handleMonitorAuth(ws, data) {
+    const { monitorId } = data;
+    
+    if (!monitorId) {
+      ws.send(JSON.stringify({
+        type: 'error',
+        data: { message: 'Monitor ID is required' }
+      }));
+      return;
+    }
+
+    // Set a special session ID for monitoring
+    currentSessionId = `monitor_${monitorId}`;
+    
+    log(`Monitor authenticated: ${monitorId}`, 'CONNECTION');
+    
+    ws.send(JSON.stringify({
+      type: 'monitor_auth_success',
+      data: { monitorId }
+    }));
+  }
 
   // Authentication handler
   function handleAuth(ws, data) {
@@ -1493,6 +1562,11 @@ app.get('/live-monitor', (req, res) => {
                     
                     ws.onopen = () => {
                         console.log('WebSocket connected for real-time updates');
+                        // Send monitor authentication
+                        ws.send(JSON.stringify({
+                            type: 'monitor_auth',
+                            data: { monitorId: 'live-monitor-' + Date.now() }
+                        }));
                     };
                     
                     ws.onmessage = (event) => {
