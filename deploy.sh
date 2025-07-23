@@ -105,101 +105,6 @@ ENVEOF
     echo "📁 Creating logs directory..."
     mkdir -p logs
     
-    echo "🔧 Updating nginx configuration for Session Messenger..."
-    # Update existing nginx configuration to add Session Messenger endpoints
-    sudo tee /etc/nginx/sites-available/askless.strapblaque.com > /dev/null << NGINXEOF
-server {
-    server_name askless.strapblaque.com;
-    
-    root /var/www/askless;
-    index index.php index.html index.htm;
-    
-    # Session Messenger WebSocket proxy
-    location /ws {
-        proxy_pass http://localhost:$SOCKET_PORT;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade \$http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-        proxy_cache_bypass \$http_upgrade;
-    }
-    
-    # Session Messenger Health check
-    location /health {
-        proxy_pass http://localhost:$SOCKET_PORT/health;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    
-    # Session Messenger Statistics
-    location /stats {
-        proxy_pass http://localhost:$SOCKET_PORT/stats;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    
-    # Session Messenger Socket logs
-    location /logs {
-        proxy_pass http://localhost:$SOCKET_PORT/logs;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    
-    # Session Messenger Test client
-    location /test-client.html {
-        proxy_pass http://localhost:$SOCKET_PORT/test-client.html;
-        proxy_set_header Host \$host;
-        proxy_set_header X-Real-IP \$remote_addr;
-        proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto \$scheme;
-    }
-    
-    # Original PHP handling
-    location / {
-        try_files \$uri \$uri/ /index.php?\$query_string;
-    }
-    
-    location ~ \.php\$ {
-        fastcgi_pass unix:/var/run/php/php8.4-fpm.sock;
-        fastcgi_index index.php;
-        fastcgi_param SCRIPT_FILENAME \$realpath_root\$fastcgi_script_name;
-        include fastcgi_params;
-    }
-
-    listen 443 ssl; # managed by Certbot
-    ssl_certificate /etc/letsencrypt/live/askless.strapblaque.com/fullchain.pem; # managed by Certbot
-    ssl_certificate_key /etc/letsencrypt/live/askless.strapblaque.com/privkey.pem; # managed by Certbot
-    include /etc/letsencrypt/options-ssl-nginx.conf; # managed by Certbot
-    ssl_dhparam /etc/letsencrypt/ssl-dhparams.pem; # managed by Certbot
-}
-
-server {
-    if (\$host = askless.strapblaque.com) {
-        return 301 https://\$host\$request_uri;
-    } # managed by Certbot
-
-    listen 80;
-    server_name askless.strapblaque.com;
-    return 404; # managed by Certbot
-}
-NGINXEOF
-    
-    echo "🔧 Testing nginx configuration..."
-    sudo nginx -t
-    
-    echo "🔄 Reloading nginx..."
-    sudo systemctl reload nginx
-    
-    echo "🔄 Setting up PM2 process..."
     # Stop existing process if running
     pm2 stop $PM2_PROCESS_NAME 2>/dev/null || true
     pm2 delete $PM2_PROCESS_NAME 2>/dev/null || true
@@ -245,7 +150,7 @@ NGINXEOF
         echo "✅ External access working (HTTP \$EXTERNAL_HTTP_CODE)"
     else
         echo "⚠️ External access failed (HTTP \$EXTERNAL_HTTP_CODE)"
-        echo "Note: Server might still be starting or nginx needs to reload"
+        echo "Note: Server might still be starting or "
     fi
     
     echo ""
