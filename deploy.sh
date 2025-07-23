@@ -47,7 +47,11 @@ fi
 # Push to git
 echo "📤 Pushing to git repository..."
 git add .
-git commit -m "Deploy: Session Messenger Server $(date)"
+if git diff --staged --quiet; then
+    echo "No changes to commit, pushing existing commits..."
+else
+    git commit -m "Deploy: Session Messenger Server $(date)"
+fi
 git push -u origin main || git push origin main
 
 echo ""
