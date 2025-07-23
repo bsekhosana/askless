@@ -11,7 +11,24 @@ require('dotenv').config();
 
 // Create Express app
 const app = express();
-app.use(helmet());
+
+// Configure helmet with CSP that allows inline scripts for live-monitor
+app.use(helmet({
+  contentSecurityPolicy: {
+    directives: {
+      defaultSrc: ["'self'"],
+      scriptSrc: ["'self'", "'unsafe-inline'"],
+      styleSrc: ["'self'", "'unsafe-inline'"],
+      imgSrc: ["'self'", "data:", "https:"],
+      connectSrc: ["'self'", "wss:", "ws:"],
+      fontSrc: ["'self'", "https:"],
+      objectSrc: ["'none'"],
+      mediaSrc: ["'self'"],
+      frameSrc: ["'none'"],
+    },
+  },
+}));
+
 app.use(cors());
 app.use(express.json());
 
