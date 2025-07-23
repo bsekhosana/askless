@@ -117,7 +117,7 @@ ENVEOF
     pm2 save
     
     echo "🔄 Setting up PM2 startup script..."
-    pm2 startup | tail -1 | bash
+    echo "Note: PM2 startup script requires manual setup with sudo access"
     
     echo "✅ Deployment completed!"
     echo ""
