@@ -797,6 +797,716 @@ app.get('/test-client.html', (req, res) => {
   res.send(html);
 });
 
+// Live Monitor endpoint
+app.get('/live-monitor', (req, res) => {
+  const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Session Messenger - Live Monitor</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: #333;
+            min-height: 100vh;
+        }
+
+        .container {
+            max-width: 1400px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+
+        .header {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            margin-bottom: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .header h1 {
+            color: #4a5568;
+            font-size: 2.5em;
+            margin-bottom: 10px;
+        }
+
+        .header .status {
+            display: inline-block;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-weight: bold;
+            font-size: 0.9em;
+        }
+
+        .status.online {
+            background: #48bb78;
+            color: white;
+        }
+
+        .status.offline {
+            background: #f56565;
+            color: white;
+        }
+
+        .grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
+            gap: 20px;
+            margin-bottom: 20px;
+        }
+
+        .card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 20px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            transition: transform 0.3s ease;
+        }
+
+        .card:hover {
+            transform: translateY(-5px);
+        }
+
+        .card h2 {
+            color: #4a5568;
+            margin-bottom: 15px;
+            font-size: 1.3em;
+            border-bottom: 2px solid #e2e8f0;
+            padding-bottom: 10px;
+        }
+
+        .stats-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 15px;
+        }
+
+        .stat-item {
+            text-align: center;
+            padding: 15px;
+            background: #f7fafc;
+            border-radius: 10px;
+            border-left: 4px solid #667eea;
+        }
+
+        .stat-number {
+            font-size: 2em;
+            font-weight: bold;
+            color: #4a5568;
+            display: block;
+        }
+
+        .stat-label {
+            color: #718096;
+            font-size: 0.9em;
+            margin-top: 5px;
+        }
+
+        .connections-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .connection-item {
+            background: #f7fafc;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border-left: 4px solid #48bb78;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .connection-item.disconnected {
+            border-left-color: #f56565;
+            opacity: 0.7;
+        }
+
+        .connection-info {
+            flex: 1;
+        }
+
+        .connection-id {
+            font-weight: bold;
+            color: #4a5568;
+        }
+
+        .connection-time {
+            font-size: 0.8em;
+            color: #718096;
+        }
+
+        .connection-status {
+            padding: 4px 8px;
+            border-radius: 12px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .status-connected {
+            background: #48bb78;
+            color: white;
+        }
+
+        .status-disconnected {
+            background: #f56565;
+            color: white;
+        }
+
+        .messages-list {
+            max-height: 400px;
+            overflow-y: auto;
+        }
+
+        .message-item {
+            background: #f7fafc;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border-left: 4px solid #4299e1;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 8px;
+        }
+
+        .message-type {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            font-weight: bold;
+        }
+
+        .type-text { background: #4299e1; color: white; }
+        .type-invitation { background: #ed8936; color: white; }
+        .type-system { background: #9f7aea; color: white; }
+        .type-typing { background: #38b2ac; color: white; }
+
+        .message-time {
+            font-size: 0.8em;
+            color: #718096;
+        }
+
+        .message-content {
+            color: #4a5568;
+            word-break: break-word;
+        }
+
+        .invitations-list {
+            max-height: 300px;
+            overflow-y: auto;
+        }
+
+        .invitation-item {
+            background: #f7fafc;
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 8px;
+            border-left: 4px solid #ed8936;
+        }
+
+        .invitation-status {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 0.8em;
+            font-weight: bold;
+            margin-left: 10px;
+        }
+
+        .status-pending { background: #ed8936; color: white; }
+        .status-accepted { background: #48bb78; color: white; }
+        .status-declined { background: #f56565; color: white; }
+        .status-expired { background: #718096; color: white; }
+
+        .logs-list {
+            max-height: 300px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 0.9em;
+        }
+
+        .log-item {
+            padding: 8px;
+            margin-bottom: 4px;
+            border-radius: 4px;
+            border-left: 3px solid #667eea;
+        }
+
+        .log-info { background: #ebf8ff; border-left-color: #4299e1; }
+        .log-warn { background: #fef5e7; border-left-color: #ed8936; }
+        .log-error { background: #fed7d7; border-left-color: #f56565; }
+
+        .log-time {
+            color: #718096;
+            font-size: 0.8em;
+        }
+
+        .log-message {
+            color: #4a5568;
+            margin-left: 10px;
+        }
+
+        .refresh-info {
+            text-align: center;
+            color: #718096;
+            font-size: 0.9em;
+            margin-top: 10px;
+        }
+
+        .auto-refresh {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 15px;
+            padding: 15px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
+            text-align: center;
+        }
+
+        .auto-refresh label {
+            margin-right: 10px;
+            color: #4a5568;
+        }
+
+        .auto-refresh input[type="checkbox"] {
+            margin-right: 5px;
+        }
+
+        @media (max-width: 768px) {
+            .grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .stats-grid {
+                grid-template-columns: 1fr;
+            }
+            
+            .header h1 {
+                font-size: 2em;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🔌 Session Messenger Live Monitor</h1>
+            <div class="status" id="serverStatus">Connecting...</div>
+            <p>Real-time monitoring dashboard for Session Messenger server</p>
+        </div>
+
+        <div class="auto-refresh">
+            <label>
+                <input type="checkbox" id="autoRefresh" checked>
+                Auto-refresh every 5 seconds
+            </label>
+            <span id="lastUpdate"></span>
+        </div>
+
+        <div class="grid">
+            <!-- Server Statistics -->
+            <div class="card">
+                <h2>📊 Server Statistics</h2>
+                <div class="stats-grid" id="serverStats">
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalConnections">0</span>
+                        <span class="stat-label">Total Connections</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="activeConnections">0</span>
+                        <span class="stat-label">Active Connections</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalMessages">0</span>
+                        <span class="stat-label">Total Messages</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="totalInvitations">0</span>
+                        <span class="stat-label">Total Invitations</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="uptime">0s</span>
+                        <span class="stat-label">Uptime</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="memoryUsage">0MB</span>
+                        <span class="stat-label">Memory Usage</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Active Connections -->
+            <div class="card">
+                <h2>🔗 Active Connections</h2>
+                <div class="connections-list" id="connectionsList">
+                    <p style="text-align: center; color: #718096;">No active connections</p>
+                </div>
+            </div>
+
+            <!-- Recent Messages -->
+            <div class="card">
+                <h2>💬 Recent Messages</h2>
+                <div class="messages-list" id="messagesList">
+                    <p style="text-align: center; color: #718096;">No messages yet</p>
+                </div>
+            </div>
+
+            <!-- Recent Invitations -->
+            <div class="card">
+                <h2>📨 Recent Invitations</h2>
+                <div class="invitations-list" id="invitationsList">
+                    <p style="text-align: center; color: #718096;">No invitations yet</p>
+                </div>
+            </div>
+
+            <!-- Server Logs -->
+            <div class="card">
+                <h2>📝 Server Logs</h2>
+                <div class="logs-list" id="logsList">
+                    <p style="text-align: center; color: #718096;">Loading logs...</p>
+                </div>
+            </div>
+
+            <!-- System Health -->
+            <div class="card">
+                <h2>❤️ System Health</h2>
+                <div class="stats-grid">
+                    <div class="stat-item">
+                        <span class="stat-number" id="cpuUsage">0%</span>
+                        <span class="stat-label">CPU Usage</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="responseTime">0ms</span>
+                        <span class="stat-label">Response Time</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="errorRate">0%</span>
+                        <span class="stat-label">Error Rate</span>
+                    </div>
+                    <div class="stat-item">
+                        <span class="stat-number" id="lastRestart">Never</span>
+                        <span class="stat-label">Last Restart</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        class SessionMonitor {
+            constructor() {
+                this.baseUrl = window.location.origin;
+                this.autoRefreshInterval = null;
+                this.lastUpdate = new Date();
+                this.connectionHistory = new Map();
+                this.messageHistory = [];
+                this.invitationHistory = [];
+                this.logHistory = [];
+                
+                this.init();
+            }
+
+            init() {
+                this.setupAutoRefresh();
+                this.loadInitialData();
+                this.startRealTimeUpdates();
+            }
+
+            setupAutoRefresh() {
+                const checkbox = document.getElementById('autoRefresh');
+                checkbox.addEventListener('change', (e) => {
+                    if (e.target.checked) {
+                        this.startAutoRefresh();
+                    } else {
+                        this.stopAutoRefresh();
+                    }
+                });
+
+                if (checkbox.checked) {
+                    this.startAutoRefresh();
+                }
+            }
+
+            startAutoRefresh() {
+                this.autoRefreshInterval = setInterval(() => {
+                    this.updateAllData();
+                }, 5000);
+            }
+
+            stopAutoRefresh() {
+                if (this.autoRefreshInterval) {
+                    clearInterval(this.autoRefreshInterval);
+                    this.autoRefreshInterval = null;
+                }
+            }
+
+            async loadInitialData() {
+                await Promise.all([
+                    this.updateServerStats(),
+                    this.updateConnections(),
+                    this.updateMessages(),
+                    this.updateInvitations(),
+                    this.updateLogs(),
+                    this.updateSystemHealth()
+                ]);
+            }
+
+            async updateAllData() {
+                this.lastUpdate = new Date();
+                document.getElementById('lastUpdate').textContent = 
+                    \`Last updated: \${this.lastUpdate.toLocaleTimeString()}\`;
+
+                await Promise.all([
+                    this.updateServerStats(),
+                    this.updateConnections(),
+                    this.updateMessages(),
+                    this.updateInvitations(),
+                    this.updateLogs(),
+                    this.updateSystemHealth()
+                ]);
+            }
+
+            async updateServerStats() {
+                try {
+                    const response = await fetch(\`\${this.baseUrl}/stats\`);
+                    const data = await response.json();
+                    
+                    document.getElementById('totalConnections').textContent = data.totalConnections || 0;
+                    document.getElementById('activeConnections').textContent = data.activeConnections || 0;
+                    document.getElementById('totalMessages').textContent = data.totalMessages || 0;
+                    document.getElementById('totalInvitations').textContent = data.totalInvitations || 0;
+                    document.getElementById('uptime').textContent = this.formatUptime(data.uptime || 0);
+                    document.getElementById('memoryUsage').textContent = this.formatBytes(data.memoryUsage || 0);
+                    
+                    // Update server status
+                    const statusElement = document.getElementById('serverStatus');
+                    statusElement.textContent = 'Online';
+                    statusElement.className = 'status online';
+                } catch (error) {
+                    console.error('Error updating server stats:', error);
+                    document.getElementById('serverStatus').textContent = 'Offline';
+                    document.getElementById('serverStatus').className = 'status offline';
+                }
+            }
+
+            async updateConnections() {
+                try {
+                    const response = await fetch(\`\${this.baseUrl}/stats\`);
+                    const data = await response.json();
+                    
+                    const connectionsList = document.getElementById('connectionsList');
+                    const connections = data.connections || [];
+                    
+                    if (connections.length === 0) {
+                        connectionsList.innerHTML = '<p style="text-align: center; color: #718096;">No active connections</p>';
+                        return;
+                    }
+
+                    connectionsList.innerHTML = connections.map(conn => \`
+                        <div class="connection-item">
+                            <div class="connection-info">
+                                <div class="connection-id">\${conn.id}</div>
+                                <div class="connection-time">Connected: \${new Date(conn.connectedAt).toLocaleTimeString()}</div>
+                            </div>
+                            <span class="connection-status status-connected">Connected</span>
+                        </div>
+                    \`).join('');
+                } catch (error) {
+                    console.error('Error updating connections:', error);
+                }
+            }
+
+            async updateMessages() {
+                try {
+                    const response = await fetch(\`\${this.baseUrl}/stats\`);
+                    const data = await response.json();
+                    
+                    const messagesList = document.getElementById('messagesList');
+                    const messages = data.recentMessages || [];
+                    
+                    if (messages.length === 0) {
+                        messagesList.innerHTML = '<p style="text-align: center; color: #718096;">No messages yet</p>';
+                        return;
+                    }
+
+                    messagesList.innerHTML = messages.slice(0, 10).map(msg => \`
+                        <div class="message-item">
+                            <div class="message-header">
+                                <span class="message-type type-\${msg.type || 'text'}">\${msg.type || 'text'}</span>
+                                <span class="message-time">\${new Date(msg.timestamp).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="message-content">
+                                <strong>\${msg.senderId}</strong> → <strong>\${msg.recipientId}</strong>: \${msg.content}
+                            </div>
+                        </div>
+                    \`).join('');
+                } catch (error) {
+                    console.error('Error updating messages:', error);
+                }
+            }
+
+            async updateInvitations() {
+                try {
+                    const response = await fetch(\`\${this.baseUrl}/stats\`);
+                    const data = await response.json();
+                    
+                    const invitationsList = document.getElementById('invitationsList');
+                    const invitations = data.recentInvitations || [];
+                    
+                    if (invitations.length === 0) {
+                        invitationsList.innerHTML = '<p style="text-align: center; color: #718096;">No invitations yet</p>';
+                        return;
+                    }
+
+                    invitationsList.innerHTML = invitations.slice(0, 10).map(inv => \`
+                        <div class="invitation-item">
+                            <div class="message-header">
+                                <span class="invitation-status status-\${inv.status}">\${inv.status}</span>
+                                <span class="message-time">\${new Date(inv.createdAt).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="message-content">
+                                <strong>\${inv.senderName}</strong> invited <strong>\${inv.recipientId}</strong>
+                                <br><em>"\${inv.message}"</em>
+                            </div>
+                        </div>
+                    \`).join('');
+                } catch (error) {
+                    console.error('Error updating invitations:', error);
+                }
+            }
+
+            async updateLogs() {
+                try {
+                    const response = await fetch(\`\${this.baseUrl}/logs\`);
+                    const data = await response.json();
+                    
+                    const logsList = document.getElementById('logsList');
+                    const logs = data.logs || [];
+                    
+                    if (logs.length === 0) {
+                        logsList.innerHTML = '<p style="text-align: center; color: #718096;">No logs available</p>';
+                        return;
+                    }
+
+                    logsList.innerHTML = logs.slice(-20).map(log => \`
+                        <div class="log-item log-\${log.level || 'info'}">
+                            <span class="log-time">\${new Date(log.timestamp).toLocaleTimeString()}</span>
+                            <span class="log-message">\${log.message}</span>
+                        </div>
+                    \`).join('');
+                    
+                    // Auto-scroll to bottom
+                    logsList.scrollTop = logsList.scrollHeight;
+                } catch (error) {
+                    console.error('Error updating logs:', error);
+                }
+            }
+
+            async updateSystemHealth() {
+                try {
+                    const startTime = Date.now();
+                    const response = await fetch(\`\${this.baseUrl}/health\`);
+                    const responseTime = Date.now() - startTime;
+                    const data = await response.json();
+                    
+                    document.getElementById('responseTime').textContent = \`\${responseTime}ms\`;
+                    document.getElementById('cpuUsage').textContent = \`\${data.cpuUsage || 0}%\`;
+                    document.getElementById('errorRate').textContent = \`\${data.errorRate || 0}%\`;
+                    document.getElementById('lastRestart').textContent = data.lastRestart ? 
+                        new Date(data.lastRestart).toLocaleTimeString() : 'Never';
+                } catch (error) {
+                    console.error('Error updating system health:', error);
+                }
+            }
+
+            startRealTimeUpdates() {
+                // WebSocket connection for real-time updates
+                try {
+                    const ws = new WebSocket(\`wss://\${window.location.host}/ws\`);
+                    
+                    ws.onopen = () => {
+                        console.log('WebSocket connected for real-time updates');
+                    };
+                    
+                    ws.onmessage = (event) => {
+                        const data = JSON.parse(event.data);
+                        this.handleRealTimeUpdate(data);
+                    };
+                    
+                    ws.onerror = (error) => {
+                        console.error('WebSocket error:', error);
+                    };
+                    
+                    ws.onclose = () => {
+                        console.log('WebSocket disconnected');
+                        // Try to reconnect after 5 seconds
+                        setTimeout(() => this.startRealTimeUpdates(), 5000);
+                    };
+                } catch (error) {
+                    console.error('Error setting up WebSocket:', error);
+                }
+            }
+
+            handleRealTimeUpdate(data) {
+                // Handle real-time updates from WebSocket
+                if (data.type === 'connection') {
+                    this.updateConnections();
+                } else if (data.type === 'message') {
+                    this.updateMessages();
+                } else if (data.type === 'invitation') {
+                    this.updateInvitations();
+                } else if (data.type === 'log') {
+                    this.updateLogs();
+                }
+            }
+
+            formatUptime(seconds) {
+                const days = Math.floor(seconds / 86400);
+                const hours = Math.floor((seconds % 86400) / 3600);
+                const minutes = Math.floor((seconds % 3600) / 60);
+                const secs = seconds % 60;
+                
+                if (days > 0) return \`\${days}d \${hours}h \${minutes}m\`;
+                if (hours > 0) return \`\${hours}h \${minutes}m\`;
+                if (minutes > 0) return \`\${minutes}m \${secs}s\`;
+                return \`\${secs}s\`;
+            }
+
+            formatBytes(bytes) {
+                if (bytes === 0) return '0 B';
+                const k = 1024;
+                const sizes = ['B', 'KB', 'MB', 'GB'];
+                const i = Math.floor(Math.log(bytes) / Math.log(k));
+                return parseFloat((bytes / Math.pow(k, i)).toFixed(1)) + ' ' + sizes[i];
+            }
+        }
+
+        // Initialize the monitor when the page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            new SessionMonitor();
+        });
+    </script>
+</body>
+</html>`;
+  
+  res.send(html);
+});
+
 // Start server
 const PORT = process.env.PORT || 8080;
 server.listen(PORT, () => {
@@ -805,6 +1515,7 @@ server.listen(PORT, () => {
   log(`Stats: http://localhost:${PORT}/stats`, 'INFO');
   log(`Logs: http://localhost:${PORT}/logs`, 'INFO');
   log(`Test Client: http://localhost:${PORT}/test-client.html`, 'INFO');
+  log(`Live Monitor: http://localhost:${PORT}/live-monitor`, 'INFO');
 });
 
 // Graceful shutdown
