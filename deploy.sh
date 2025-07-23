@@ -15,6 +15,7 @@ SOCKET_PORT=5000
 SERVER_PATH=/var/www/askless
 GIT_REPO=git@github.com:bsekhosana/askless.git
 PM2_PROCESS_NAME=askless-session-messenger
+ROOT_PASS=vUO0ICyZFZhv
 
 echo "🚀 Session Messenger Server Deployment"
 echo "======================================"

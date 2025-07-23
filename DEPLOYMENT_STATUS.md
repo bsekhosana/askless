@@ -3,3 +3,4 @@
 # Updated deployment script - Wed Jul 23 11:52:44 SAST 2025
 # Fixed deployment script - no nginx config - Wed Jul 23 11:54:29 SAST 2025
 # Testing fixed deployment script - Wed Jul 23 11:56:42 SAST 2025
+# Testing with sudo access - Wed Jul 23 11:59:55 SAST 2025
