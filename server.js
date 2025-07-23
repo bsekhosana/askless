@@ -1437,7 +1437,7 @@ app.get('/live-monitor', (req, res) => {
 
                     logsList.innerHTML = logs.slice(-20).map(logString => {
                         // Parse log string format: [2025-07-23T19:27:04.008Z] [INFO] Message
-                        const logMatch = logString.match(/^\[([^\]]+)\] \[([^\]]+)\] (.+)$/);
+                        const logMatch = logString.match(/^\\[([^\\]]+)\\] \\[([^\\]]+)\\] (.+)$/);
                         
                         if (logMatch) {
                             const [, timestamp, level, message] = logMatch;
