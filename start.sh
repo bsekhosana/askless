@@ -45,7 +45,7 @@ fi
 source .env
 
 # Check if server is already running
-if pm2 list | grep -q "askless-session-messenger"; then
+if pm2 list | grep -q "askless-session-messenger.*online"; then
     echo "⚠️ Server is already running. Use restart-server.sh to restart."
     pm2 show askless-session-messenger
     exit 0
